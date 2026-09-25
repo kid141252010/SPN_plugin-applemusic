@@ -1,4 +1,4 @@
-# SPlayer-Next Apple Music 音源插件 (`splayer.plugin.applemusic`)
+# SPlayer-Next Apple Music 音源插件 (`1412.applemusic`)
 
 专为 **[SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next)** 桌面音乐播放器打造的 **Apple Music 音源解析插件**。  
 基于 **[am-hook](https://music.ak1ra.de5.net/)** 解密流中继服务，为播放器提供高品质/无损音频（ALAC）、标准立体声（AAC）以及**杜比全景声（Dolby Atmos / 空间音频）**的完整播放支持。
@@ -18,7 +18,7 @@
 
 ## 插件配置项 (Plugin Settings)
 
-安装后，在 SPlayer-Next 的 **设置 → 插件管理 → Apple Music 音源插件 → 设置** 中即可可视化调整：
+安装后，在 SPlayer-Next 的 **设置 → 插件管理 → Apple Music 音源 → 设置** 中即可可视化调整：
 
 | 配置项 (Key) | 类型 | 默认值 | 说明 |
 | :--- | :---: | :---: | :--- |
@@ -43,15 +43,15 @@
 ## 安装与使用方法
 
 ### 方式一：在 SPlayer-Next 界面本地导入
-1. 下载或构建产物文件 `dist/splayer.plugin.applemusic.js`。
+1. 下载或构建产物文件 `dist/1412.applemusic.js`。
 2. 打开 SPlayer-Next 播放器，进入 **设置 → 插件管理**。
-3. 点击 **本地导入**，选择 `splayer.plugin.applemusic.js` 即可启用。
+3. 点击 **本地导入**，选择 `1412.applemusic.js` 即可启用。
 
 ### 方式二：直接放入播放器插件目录
-将 `splayer.plugin.applemusic.js` 复制到以下系统目录：
-- **Windows**: `%APPDATA%\SPlayer-Next\app-data\plugins\scripts\splayer.plugin.applemusic.js`
-- **macOS**: `~/Library/Application Support/SPlayer-Next/app-data/plugins/scripts/splayer.plugin.applemusic.js`
-- **Linux**: `~/.config/SPlayer-Next/app-data/plugins/scripts/splayer.plugin.applemusic.js`
+将 `1412.applemusic.js` 复制到以下系统目录：
+- **Windows**: `%APPDATA%\SPlayer-Next\app-data\plugins\scripts\1412.applemusic.js`
+- **macOS**: `~/Library/Application Support/SPlayer-Next/app-data/plugins/scripts/1412.applemusic.js`
+- **Linux**: `~/.config/SPlayer-Next/app-data/plugins/scripts/1412.applemusic.js`
 
 ---
 
@@ -68,7 +68,7 @@ pnpm test
 pnpm run build
 ```
 
-打包成功后，单文件产物将输出在 `dist/splayer.plugin.applemusic.js`。
+打包成功后，单文件产物将输出在 `dist/1412.applemusic.js`。
 
 ---
 

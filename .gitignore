@@ -4,7 +4,7 @@ node_modules/
 
 # Build artifacts
 dist/*
-!dist/splayer.plugin.applemusic.js
+!dist/1412.applemusic.js
 build/
 out/
 

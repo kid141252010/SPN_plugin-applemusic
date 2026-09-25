@@ -105,10 +105,10 @@ export interface SPlayerHost {
       headers?: Record<string, string>;
       body?: string | Uint8Array;
       timeout?: number;
-      signal?: AbortSignal;
     },
   ) => Promise<{
-    statusCode: number;
+    status: number;
+    statusCode?: number;
     headers: Record<string, string>;
     body: string | Uint8Array;
   }>;

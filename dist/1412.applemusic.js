@@ -1,9 +1,9 @@
 /**
- * @name Apple Music 音源插件
- * @id splayer.plugin.applemusic
+ * @name Apple Music 音源
+ * @id 1412.applemusic
  * @version 1.0.0
  * @description 基于 am-hook 上游服务为 SPlayer-Next 提供 Apple Music 音频流解析支持（支持 Hi-Res、Lossless 无损及杜比全景声）
- * @author SPlayer
+ * @author 1412
  * @type source
  * @apiLevel 2
  */
@@ -251,19 +251,17 @@
     const timeoutMs = Number(splayer.getSetting("requestTimeout")) || DEFAULT_TIMEOUT_MS;
     const parseEndpoint = `${upstream}/parse/${adamId}?storefront=${encodeURIComponent(storefront)}`;
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
       const res = await splayer.request(parseEndpoint, {
         method: "GET",
-        signal: controller.signal,
+        timeout: timeoutMs,
         headers: {
           Accept: "application/json",
-          "User-Agent": "SPlayer-Next/Plugin-AppleMusic"
+          "User-Agent": "SPlayer-Next/1412.applemusic"
         }
       });
-      clearTimeout(timer);
-      if (res.statusCode !== 200) {
-        throw new Error(`\u4E0A\u6E38\u670D\u52A1\u5668\u54CD\u5E94 HTTP ${res.statusCode}`);
+      const status = res.status ?? res.statusCode;
+      if (status !== 200) {
+        throw new Error(`\u4E0A\u6E38\u670D\u52A1\u5668\u54CD\u5E94 HTTP ${status}`);
       }
       const data = typeof res.body === "string" ? JSON.parse(res.body) : JSON.parse(new TextDecoder().decode(res.body));
       if (!data.masterUrl || !Array.isArray(data.variants) || data.variants.length === 0) {

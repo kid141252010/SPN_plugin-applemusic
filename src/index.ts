@@ -96,21 +96,18 @@ splayer.on("musicUrl", async (req: MusicUrlReq): Promise<MusicUrlRes> => {
   const parseEndpoint = `${upstream}/parse/${adamId}?storefront=${encodeURIComponent(storefront)}`;
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-
     const res = await splayer.request(parseEndpoint, {
       method: "GET",
-      signal: controller.signal,
+      timeout: timeoutMs,
       headers: {
         Accept: "application/json",
-        "User-Agent": "SPlayer-Next/Plugin-AppleMusic",
+        "User-Agent": "SPlayer-Next/1412.applemusic",
       },
     });
-    clearTimeout(timer);
 
-    if (res.statusCode !== 200) {
-      throw new Error(`上游服务器响应 HTTP ${res.statusCode}`);
+    const status = res.status ?? res.statusCode;
+    if (status !== 200) {
+      throw new Error(`上游服务器响应 HTTP ${status}`);
     }
 
     const data: AmParseResponse =

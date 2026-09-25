@@ -59,11 +59,11 @@
 
 ```javascript
 /**
- * @name Apple Music 音源插件
- * @id splayer.plugin.applemusic
+ * @name Apple Music 音源
+ * @id 1412.applemusic
  * @version 1.0.0
  * @description 为 SPlayer-Next 提供 Apple Music 高品质音频播放流解析支持
- * @author YourName
+ * @author 1412
  * @type source
  * @apiLevel 2
  */
