@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractAdamId, resolveStorefront } from "../src/extractor";
+import { extractAdamId, getStorefront } from "../src/extractor";
 
 describe("extractAdamId", () => {
   it("应正确解析纯数字字符串 ID", () => {
@@ -7,7 +7,7 @@ describe("extractAdamId", () => {
   });
 
   it("应正确解析数字类型 ID", () => {
-    expect(extractAdamId({ songmid: 1468058171, id: 1468058171 })).toBe("1468058171");
+    expect(extractAdamId({ songmid: "1468058171", id: "1468058171" })).toBe("1468058171");
   });
 
   it("应正确解析带前缀的 ID (am_1468058171)", () => {
@@ -40,53 +40,26 @@ describe("extractAdamId", () => {
   });
 });
 
-describe("resolveStorefront", () => {
-  it("应优先读取本体显式传入的 storefront (支持 camelCase storeFront / 大写 / 空格)", () => {
-    expect(resolveStorefront({ songmid: "1468058171", storefront: "us" })).toBe("us");
-    expect(resolveStorefront({ songmid: "1468058171", storefront: "JP" })).toBe("jp");
-    expect(resolveStorefront({ songmid: "1468058171", storeFront: "jp" } as any)).toBe("jp");
-    expect(resolveStorefront({ songmid: "1468058171", StoreFront: " kr " } as any)).toBe("kr");
+describe("getStorefront", () => {
+  it("应直接读取本体透传的 musicInfo.storefront", () => {
+    expect(getStorefront({ songmid: "1468058171", storefront: "us" })).toBe("us");
+    expect(getStorefront({ songmid: "1468058171", storefront: "jp" })).toBe("jp");
   });
 
-  it("应正确处理 zh-CN 或 en-US 等 Locale 格式", () => {
-    expect(resolveStorefront({ songmid: "1468058171", storefront: "zh-CN" })).toBe("cn");
-    expect(resolveStorefront({ songmid: "1468058171", storeFront: "en_US" } as any)).toBe("us");
+  it("支持大写自动转换为小写", () => {
+    expect(getStorefront({ songmid: "1468058171", storefront: "TR" })).toBe("tr");
   });
 
-  it("应读取 meta.storefront / meta.storeFront / meta.country / meta.region", () => {
+  it("支持读取 meta.storefront 备选", () => {
     expect(
-      resolveStorefront({
+      getStorefront({
         songmid: "1468058171",
-        meta: { storefront: "tr" },
-      }),
-    ).toBe("tr");
-    expect(
-      resolveStorefront({
-        songmid: "1468058171",
-        meta: { storeFront: "jp" },
-      } as any),
-    ).toBe("jp");
-    expect(
-      resolveStorefront({
-        songmid: "1468058171",
-        meta: { country: "kr" },
+        meta: { storefront: "kr" },
       }),
     ).toBe("kr");
-    expect(
-      resolveStorefront({
-        songmid: "1468058171",
-        meta: { region: "hk" },
-      }),
-    ).toBe("hk");
   });
 
-  it("当本体未传时，应从 Apple Music Web 链接路径中提取国家代码", () => {
-    const url = "https://music.apple.com/jp/song/someone-you-loved/1468058171";
-    expect(resolveStorefront({ songmid: url })).toBe("jp");
-  });
-
-  it("无任何地区信息时应退回默认 fallback (cn)", () => {
-    expect(resolveStorefront({ songmid: "1468058171" })).toBe("cn");
-    expect(resolveStorefront({ songmid: "1468058171" }, "us")).toBe("us");
+  it("未传 storefront 时安全回退到默认 'cn'", () => {
+    expect(getStorefront({ songmid: "1468058171" })).toBe("cn");
   });
 });

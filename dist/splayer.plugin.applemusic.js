@@ -14,10 +14,10 @@
   function extractAdamId(musicInfo) {
     if (!musicInfo) return null;
     const candidates = [
-      musicInfo.meta?.songId,
-      musicInfo.songId,
       musicInfo.id,
-      musicInfo.songmid
+      musicInfo.songmid,
+      musicInfo.songId,
+      musicInfo.meta?.songId
     ];
     for (const raw of candidates) {
       if (raw === void 0 || raw === null) continue;
@@ -30,67 +30,19 @@
       if (prefixMatch) {
         return prefixMatch[1];
       }
-      if (str.includes("music.apple.com")) {
-        const trackParamMatch = str.match(/[?&]i=(\d{5,12})/);
-        if (trackParamMatch) {
-          return trackParamMatch[1];
-        }
-        const songPathMatch = str.match(/\/song\/(?:[^\/]+\/)?(\d{5,12})/i);
-        if (songPathMatch) {
-          return songPathMatch[1];
-        }
-        const albumPathMatch = str.match(/\/album\/(?:[^\/]+\/)?(\d{5,12})/i);
-        if (albumPathMatch) {
-          return albumPathMatch[1];
-        }
-      }
-      const generalMatch = str.match(/\b(\d{6,12})\b/);
-      if (generalMatch) {
-        return generalMatch[1];
+      const urlMatch = str.match(/(?:\/song\/(?:[^\/]+\/)?|\?i=)(\d{5,12})/i);
+      if (urlMatch) {
+        return urlMatch[1];
       }
     }
     return null;
   }
-  function resolveStorefront(musicInfo, fallback = "cn") {
-    if (!musicInfo) return fallback.toLowerCase();
-    const info = musicInfo;
-    const meta = musicInfo.meta || {};
-    const candidates = [
-      info.storefront,
-      info.storeFront,
-      info.Storefront,
-      info.StoreFront,
-      info.region,
-      info.country,
-      meta.storefront,
-      meta.storeFront,
-      meta.Storefront,
-      meta.StoreFront,
-      meta.region,
-      meta.country
-    ];
-    for (const raw of candidates) {
-      if (typeof raw !== "string") continue;
-      const str = raw.trim().toLowerCase();
-      if (!str) continue;
-      if (/^[a-z]{2}$/.test(str)) {
-        return str;
-      }
-      const localeMatch = str.match(/[-_]([a-z]{2})$/);
-      if (localeMatch) {
-        return localeMatch[1];
-      }
+  function getStorefront(musicInfo) {
+    const raw = musicInfo?.storefront || musicInfo?.meta?.storefront;
+    if (typeof raw === "string" && raw.trim()) {
+      return raw.trim().toLowerCase();
     }
-    const urlCandidates = [musicInfo.songmid, musicInfo.id, musicInfo.songId];
-    for (const item of urlCandidates) {
-      if (typeof item === "string" && item.includes("music.apple.com")) {
-        const urlMatch = item.match(/music\.apple\.com\/([a-zA-Z]{2})\//);
-        if (urlMatch) {
-          return urlMatch[1].toLowerCase();
-        }
-      }
-    }
-    return fallback.toLowerCase();
+    return "cn";
   }
 
   // src/matcher.ts
@@ -251,23 +203,6 @@
       default: false
     },
     {
-      key: "defaultStorefront",
-      type: "select",
-      label: "\u9ED8\u8BA4 Storefront \u5730\u533A\u4EE3\u7801",
-      description: "\u5F53\u5BBF\u4E3B\u672C\u4F53\u672A\u4F20\u9012\u5730\u533A\u3001\u4E14\u94FE\u63A5\u672A\u5305\u542B\u5730\u533A\u8DEF\u5F84\u65F6\u7684\u515C\u5E95 Apple Music \u5730\u533A",
-      default: "cn",
-      options: [
-        { label: "\u4E2D\u56FD\u5927\u9646 (cn)", value: "cn" },
-        { label: "\u7F8E\u56FD (us)", value: "us" },
-        { label: "\u65E5\u672C (jp)", value: "jp" },
-        { label: "\u571F\u8033\u5176 (tr)", value: "tr" },
-        { label: "\u97E9\u56FD (kr)", value: "kr" },
-        { label: "\u4E2D\u56FD\u9999\u6E2F (hk)", value: "hk" },
-        { label: "\u4E2D\u56FD\u53F0\u6E7E (tw)", value: "tw" },
-        { label: "\u82F1\u56FD (gb)", value: "gb" }
-      ]
-    },
-    {
       key: "upstreamUrl",
       type: "text",
       label: "am-hook \u4E0A\u6E38\u670D\u52A1\u5730\u5740",
@@ -305,8 +240,7 @@
       const rawHint = musicInfo.id || musicInfo.songmid || musicInfo.name || "\u672A\u77E5";
       throw new Error(`[am-hook] \u65E0\u6CD5\u4ECE\u66F2\u76EE\u4FE1\u606F\u4E2D\u63D0\u53D6\u6709\u6548\u7684 Apple Music Adam ID (${rawHint})`);
     }
-    const configuredStorefront = splayer.getSetting("defaultStorefront") || "cn";
-    const storefront = resolveStorefront(musicInfo, configuredStorefront);
+    const storefront = getStorefront(musicInfo);
     const cachedError = checkNegativeCache(adamId, storefront);
     if (cachedError) {
       throw new Error(`[am-hook] \u66F2\u76EE\u5728 [${storefront}] \u5730\u533A\u77ED\u671F\u5185\u89E3\u6790\u5931\u8D25\uFF0C\u5DF2\u8DF3\u8FC7: ${cachedError}`);
@@ -315,9 +249,7 @@
     const rawUpstream = splayer.getSetting("upstreamUrl") || DEFAULT_UPSTREAM;
     const upstream = rawUpstream.trim().replace(/\/+$/, "");
     const timeoutMs = Number(splayer.getSetting("requestTimeout")) || DEFAULT_TIMEOUT_MS;
-    const parseEndpoint = `${upstream}/parse/${adamId}?storefront=${encodeURIComponent(
-      storefront
-    )}&cc=${encodeURIComponent(storefront)}&region=${encodeURIComponent(storefront)}`;
+    const parseEndpoint = `${upstream}/parse/${adamId}?storefront=${encodeURIComponent(storefront)}`;
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);

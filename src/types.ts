@@ -5,26 +5,27 @@
 /** SPlayer-Next 音质等级 (与宿主 QualityLevel 保持一致) */
 export type PluginQuality = "hi-res" | "lossless" | "hq" | "sq" | "lq";
 
-/** 宿主传入的曲目元数据 */
+/** 宿主传入的曲目元数据 (对齐 SPlayer-Next 官方规范) */
 export interface MusicInfo {
-  id?: string | number;
-  songmid: string | number;
-  songId?: string | number;
+  id?: string;
+  songmid: string;
+  songId?: string;
   name?: string;
   singer?: string;
   source?: string;
   interval?: string | null;
   img?: string | null;
-  albumId?: string | number;
+  albumId?: string;
   albumName?: string;
+  /** Apple Music 商店地区代码（如 cn / us / tr 等），由宿主透传 */
   storefront?: string;
   meta?: {
-    songId?: string | number;
-    isrc?: string;
+    songId?: string;
+    albumName?: string;
+    albumId?: string;
     picUrl?: string | null;
+    isrc?: string;
     storefront?: string;
-    country?: string;
-    region?: string;
     [key: string]: unknown;
   };
   [key: string]: unknown;
