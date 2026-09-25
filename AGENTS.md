@@ -9,7 +9,7 @@
 - **项目定位**：本项目是一个专为 **[SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next)** 桌面音乐播放器打造的 **Apple Music 音源插件**（Source Plugin）。
 - **核心目标**：
   - 当 SPlayer-Next 播放来自 Apple Music 平台的曲目（`track.source === "applemusic"`，内部映射 source key 为 `am`）时，为播放器解析并返回高品质、可播放的真实音频流/直链 URL（`musicUrl`）。
-  - （可选扩展）提供 Apple Music 优质逐字歌词（TTML 格式）与高清封面元数据兜底（`musicLyric`、`musicPic`、`musicSearch`）。
+  - **范围界定**：本项目**仅聚焦音频流取址解析**（`musicUrl`），**不实现歌词获取**（SPlayer-Next 已具备完善的多源逐字歌词检索与 AMLL TTML 管道，歌词解析交由宿主既有流水线处理）。
 - **关键参考目录与文档**：
   - **宿主播放器本地源码**：`E:\SPlayer-Next`
   - **官方插件开发文档**：[https://splayer-next.imsyy.top/plugins/](https://splayer-next.imsyy.top/plugins/)
@@ -62,7 +62,7 @@
  * @name Apple Music 音源插件
  * @id splayer.plugin.applemusic
  * @version 1.0.0
- * @description 为 SPlayer-Next 提供 Apple Music 高品质音源解析与元数据支持
+ * @description 为 SPlayer-Next 提供 Apple Music 高品质音频播放流解析支持
  * @author YourName
  * @type source
  * @apiLevel 2
@@ -81,7 +81,7 @@ splayer.register({
     // 对应 SPlayer-Next 中 PLATFORM_TO_PLUGIN_SOURCE["applemusic"] = "am"
     am: {
       name: "Apple Music",
-      actions: ["musicUrl"], // 可选包含: ["musicUrl", "musicSearch", "musicLyric", "musicPic"]
+      actions: ["musicUrl"], // 专注音源播放流解析
       qualities: ["lq", "hq", "lossless", "hi-res"],
     },
   },
