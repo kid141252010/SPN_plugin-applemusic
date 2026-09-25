@@ -17,20 +17,23 @@ const DEFAULT_NEGATIVE_TTL_MS = 10 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 500;
 
 /**
- * 检查指定 Adam ID 是否处于负缓存期
+ * 检查指定 Adam ID 与 Storefront 是否处于负缓存期
  * @param adamId Apple Music Adam ID
+ * @param storefront 地区代码 (如 cn, us)
  * @param ttlMs 缓存有效期（毫秒）
  * @returns 若命中负缓存返回失败原因，否则返回 null
  */
 export function checkNegativeCache(
   adamId: string,
+  storefront = "",
   ttlMs = DEFAULT_NEGATIVE_TTL_MS,
 ): string | null {
-  const item = negativeCache.get(adamId);
+  const key = storefront ? `${adamId}:${storefront}` : adamId;
+  const item = negativeCache.get(key);
   if (!item) return null;
 
   if (Date.now() - item.timestamp > ttlMs) {
-    negativeCache.delete(adamId);
+    negativeCache.delete(key);
     return null;
   }
 
@@ -40,16 +43,22 @@ export function checkNegativeCache(
 /**
  * 记录解析失败到负缓存
  * @param adamId Apple Music Adam ID
+ * @param storefront 地区代码
  * @param reason 失败原因描述
  */
-export function recordNegativeCache(adamId: string, reason: string): void {
+export function recordNegativeCache(
+  adamId: string,
+  storefront: string,
+  reason: string,
+): void {
+  const key = storefront ? `${adamId}:${storefront}` : adamId;
   if (negativeCache.size >= MAX_CACHE_ENTRIES) {
     // 简单淘汰最旧的一条记录
     const oldestKey = negativeCache.keys().next().value;
     if (oldestKey) negativeCache.delete(oldestKey);
   }
 
-  negativeCache.set(adamId, {
+  negativeCache.set(key, {
     timestamp: Date.now(),
     reason,
   });

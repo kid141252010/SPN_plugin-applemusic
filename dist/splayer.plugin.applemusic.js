@@ -51,6 +51,23 @@
     }
     return null;
   }
+  function resolveStorefront(musicInfo, fallback = "cn") {
+    if (!musicInfo) return fallback.toLowerCase();
+    const explicit = musicInfo.storefront || musicInfo.meta?.storefront || musicInfo.meta?.country || musicInfo.meta?.region;
+    if (typeof explicit === "string" && /^[a-zA-Z]{2}$/.test(explicit.trim())) {
+      return explicit.trim().toLowerCase();
+    }
+    const candidates = [musicInfo.songmid, musicInfo.id, musicInfo.songId];
+    for (const item of candidates) {
+      if (typeof item === "string" && item.includes("music.apple.com")) {
+        const urlMatch = item.match(/music\.apple\.com\/([a-zA-Z]{2})\//);
+        if (urlMatch) {
+          return urlMatch[1].toLowerCase();
+        }
+      }
+    }
+    return fallback.toLowerCase();
+  }
 
   // src/matcher.ts
   function isDolbyAtmos(v) {
@@ -176,21 +193,23 @@
   var negativeCache = /* @__PURE__ */ new Map();
   var DEFAULT_NEGATIVE_TTL_MS = 10 * 60 * 1e3;
   var MAX_CACHE_ENTRIES = 500;
-  function checkNegativeCache(adamId, ttlMs = DEFAULT_NEGATIVE_TTL_MS) {
-    const item = negativeCache.get(adamId);
+  function checkNegativeCache(adamId, storefront = "", ttlMs = DEFAULT_NEGATIVE_TTL_MS) {
+    const key = storefront ? `${adamId}:${storefront}` : adamId;
+    const item = negativeCache.get(key);
     if (!item) return null;
     if (Date.now() - item.timestamp > ttlMs) {
-      negativeCache.delete(adamId);
+      negativeCache.delete(key);
       return null;
     }
     return item.reason;
   }
-  function recordNegativeCache(adamId, reason) {
+  function recordNegativeCache(adamId, storefront, reason) {
+    const key = storefront ? `${adamId}:${storefront}` : adamId;
     if (negativeCache.size >= MAX_CACHE_ENTRIES) {
       const oldestKey = negativeCache.keys().next().value;
       if (oldestKey) negativeCache.delete(oldestKey);
     }
-    negativeCache.set(adamId, {
+    negativeCache.set(key, {
       timestamp: Date.now(),
       reason
     });
@@ -206,6 +225,23 @@
       label: "\u4F18\u5148\u675C\u6BD4\u5168\u666F\u58F0 (Dolby Atmos)",
       description: "\u82E5\u66F2\u76EE\u63D0\u4F9B\u675C\u6BD4\u5168\u666F\u58F0 / \u7A7A\u95F4\u97F3\u9891 (ec-3 \u7F16\u7801) \u97F3\u8F68\uFF0C\u65E0\u8BBA\u8BF7\u6C42\u4F55\u79CD\u97F3\u8D28\u5747\u4F18\u5148\u8FD4\u56DE\u8BE5\u97F3\u8F68\uFF08\u9700\u64AD\u653E\u8BBE\u5907\u53CA\u7CFB\u7EDF\u652F\u6301\u591A\u58F0\u9053\u8F93\u51FA\uFF09",
       default: false
+    },
+    {
+      key: "defaultStorefront",
+      type: "select",
+      label: "\u9ED8\u8BA4 Storefront \u5730\u533A\u4EE3\u7801",
+      description: "\u5F53\u5BBF\u4E3B\u672C\u4F53\u672A\u4F20\u9012\u5730\u533A\u3001\u4E14\u94FE\u63A5\u672A\u5305\u542B\u5730\u533A\u8DEF\u5F84\u65F6\u7684\u515C\u5E95 Apple Music \u5730\u533A",
+      default: "cn",
+      options: [
+        { label: "\u4E2D\u56FD\u5927\u9646 (cn)", value: "cn" },
+        { label: "\u7F8E\u56FD (us)", value: "us" },
+        { label: "\u65E5\u672C (jp)", value: "jp" },
+        { label: "\u571F\u8033\u5176 (tr)", value: "tr" },
+        { label: "\u97E9\u56FD (kr)", value: "kr" },
+        { label: "\u4E2D\u56FD\u9999\u6E2F (hk)", value: "hk" },
+        { label: "\u4E2D\u56FD\u53F0\u6E7E (tw)", value: "tw" },
+        { label: "\u82F1\u56FD (gb)", value: "gb" }
+      ]
     },
     {
       key: "upstreamUrl",
@@ -245,15 +281,19 @@
       const rawHint = musicInfo.id || musicInfo.songmid || musicInfo.name || "\u672A\u77E5";
       throw new Error(`[am-hook] \u65E0\u6CD5\u4ECE\u66F2\u76EE\u4FE1\u606F\u4E2D\u63D0\u53D6\u6709\u6548\u7684 Apple Music Adam ID (${rawHint})`);
     }
-    const cachedError = checkNegativeCache(adamId);
+    const configuredStorefront = splayer.getSetting("defaultStorefront") || "cn";
+    const storefront = resolveStorefront(musicInfo, configuredStorefront);
+    const cachedError = checkNegativeCache(adamId, storefront);
     if (cachedError) {
-      throw new Error(`[am-hook] \u66F2\u76EE\u77ED\u671F\u5185\u89E3\u6790\u5931\u8D25\uFF0C\u5DF2\u89E6\u53D1\u8DF3\u8FC7: ${cachedError}`);
+      throw new Error(`[am-hook] \u66F2\u76EE\u5728 [${storefront}] \u5730\u533A\u77ED\u671F\u5185\u89E3\u6790\u5931\u8D25\uFF0C\u5DF2\u8DF3\u8FC7: ${cachedError}`);
     }
     const preferDolbyAtmos = Boolean(splayer.getSetting("preferDolbyAtmos") ?? false);
     const rawUpstream = splayer.getSetting("upstreamUrl") || DEFAULT_UPSTREAM;
     const upstream = rawUpstream.trim().replace(/\/+$/, "");
     const timeoutMs = Number(splayer.getSetting("requestTimeout")) || DEFAULT_TIMEOUT_MS;
-    const parseEndpoint = `${upstream}/parse/${adamId}`;
+    const parseEndpoint = `${upstream}/parse/${adamId}?storefront=${encodeURIComponent(
+      storefront
+    )}&cc=${encodeURIComponent(storefront)}&region=${encodeURIComponent(storefront)}`;
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -271,7 +311,7 @@
       }
       const data = typeof res.body === "string" ? JSON.parse(res.body) : JSON.parse(new TextDecoder().decode(res.body));
       if (!data.masterUrl || !Array.isArray(data.variants) || data.variants.length === 0) {
-        throw new Error(data.msg || "\u672A\u80FD\u89E3\u6790\u5230\u8BE5\u66F2\u76EE\u7684\u53EF\u7528\u97F3\u8F68\u53D8\u4F53");
+        throw new Error(data.msg || `\u672A\u80FD\u89E3\u6790\u5230 [${storefront}] \u5730\u533A\u8BE5\u66F2\u76EE\u7684\u53EF\u7528\u97F3\u8F68\u53D8\u4F53`);
       }
       if (!data.hook) {
         throw new Error("\u4E0A\u6E38 am-hook \u5B9E\u4F8B\u672A\u5F00\u542F --hook \u670D\u52A1\u7AEF\u89E3\u5BC6\u6D41\u4EE3\u7406\u6A21\u5F0F\uFF0C\u65E0\u6CD5\u76F4\u63A5\u64AD\u653E");
@@ -283,7 +323,7 @@
       const baseUrl = data.masterUrl.slice(0, data.masterUrl.lastIndexOf("/") + 1);
       const streamUrl = `${upstream}/${baseUrl}${matched.variant.file_uri}`;
       splayer.log.info(
-        `[am-hook] \u6210\u529F\u89E3\u6790 Adam ID ${adamId} -> \u7F16\u7801: ${matched.variant.codecs}, \u8D28\u91CF: ${matched.quality}` + (preferDolbyAtmos && matched.variant.codecs.includes("ec-3") ? " (\u675C\u6BD4\u5168\u666F\u58F0)" : "")
+        `[am-hook] \u6210\u529F\u89E3\u6790 [${storefront}] Adam ID ${adamId} -> \u7F16\u7801: ${matched.variant.codecs}, \u8D28\u91CF: ${matched.quality}` + (preferDolbyAtmos && matched.variant.codecs.includes("ec-3") ? " (\u675C\u6BD4\u5168\u666F\u58F0)" : "")
       );
       return {
         url: streamUrl,
@@ -291,8 +331,8 @@
       };
     } catch (err) {
       const message = err.message || String(err);
-      recordNegativeCache(adamId, message);
-      splayer.log.warn(`[am-hook] \u89E3\u6790\u5931\u8D25 (${adamId}): ${message}`);
+      recordNegativeCache(adamId, storefront, message);
+      splayer.log.warn(`[am-hook] [${storefront}] \u89E3\u6790\u5931\u8D25 (${adamId}): ${message}`);
       throw new Error(`[am-hook] \u97F3\u6E90\u89E3\u6790\u5931\u8D25: ${message}`);
     }
   });

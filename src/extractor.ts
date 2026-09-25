@@ -62,3 +62,38 @@ export function extractAdamId(musicInfo: MusicInfo): string | null {
 
   return null;
 }
+
+/**
+ * 解析当前曲目对应的 Apple Music Storefront (地区代码，如 cn, us, jp)
+ * @param musicInfo 宿主传入的元数据
+ * @param fallback 兜底默认值
+ * @returns 规范化的 2 位小写国家/地区码
+ */
+export function resolveStorefront(musicInfo: MusicInfo, fallback = "cn"): string {
+  if (!musicInfo) return fallback.toLowerCase();
+
+  // 1. 本体显式传递：musicInfo.storefront 或 musicInfo.meta.storefront/country/region
+  const explicit =
+    musicInfo.storefront ||
+    musicInfo.meta?.storefront ||
+    musicInfo.meta?.country ||
+    musicInfo.meta?.region;
+
+  if (typeof explicit === "string" && /^[a-zA-Z]{2}$/.test(explicit.trim())) {
+    return explicit.trim().toLowerCase();
+  }
+
+  // 2. 从链接中提取（例如用户导入了带 /us/ 或 /jp/ 路径的 Apple Music URL）
+  const candidates = [musicInfo.songmid, musicInfo.id, musicInfo.songId];
+  for (const item of candidates) {
+    if (typeof item === "string" && item.includes("music.apple.com")) {
+      const urlMatch = item.match(/music\.apple\.com\/([a-zA-Z]{2})\//);
+      if (urlMatch) {
+        return urlMatch[1].toLowerCase();
+      }
+    }
+  }
+
+  return fallback.toLowerCase();
+}
+

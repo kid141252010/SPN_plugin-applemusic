@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractAdamId } from "../src/extractor";
+import { extractAdamId, resolveStorefront } from "../src/extractor";
 
 describe("extractAdamId", () => {
   it("应正确解析纯数字字符串 ID", () => {
@@ -37,5 +37,37 @@ describe("extractAdamId", () => {
   it("无效输入应返回 null", () => {
     expect(extractAdamId({ songmid: "abc" })).toBeNull();
     expect(extractAdamId({ songmid: "" })).toBeNull();
+  });
+});
+
+describe("resolveStorefront", () => {
+  it("应优先读取本体显式传入的 storefront", () => {
+    expect(resolveStorefront({ songmid: "1468058171", storefront: "us" })).toBe("us");
+    expect(resolveStorefront({ songmid: "1468058171", storefront: "JP" })).toBe("jp");
+  });
+
+  it("应读取 meta.storefront / meta.country / meta.region", () => {
+    expect(
+      resolveStorefront({
+        songmid: "1468058171",
+        meta: { storefront: "tr" },
+      }),
+    ).toBe("tr");
+    expect(
+      resolveStorefront({
+        songmid: "1468058171",
+        meta: { country: "kr" },
+      }),
+    ).toBe("kr");
+  });
+
+  it("当本体未传时，应从 Apple Music Web 链接路径中提取国家代码", () => {
+    const url = "https://music.apple.com/jp/song/someone-you-loved/1468058171";
+    expect(resolveStorefront({ songmid: url })).toBe("jp");
+  });
+
+  it("无任何地区信息时应退回默认 fallback (cn)", () => {
+    expect(resolveStorefront({ songmid: "1468058171" })).toBe("cn");
+    expect(resolveStorefront({ songmid: "1468058171" }, "us")).toBe("us");
   });
 });

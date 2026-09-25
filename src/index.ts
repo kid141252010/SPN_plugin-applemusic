@@ -5,7 +5,7 @@ import type {
   PluginQuality,
   PluginSettingItem,
 } from "./types";
-import { extractAdamId } from "./extractor";
+import { extractAdamId, resolveStorefront } from "./extractor";
 import { pickBestVariant } from "./matcher";
 import { checkNegativeCache, recordNegativeCache } from "./cache";
 
@@ -24,6 +24,23 @@ const SETTINGS: PluginSettingItem[] = [
     description:
       "若曲目提供杜比全景声 / 空间音频 (ec-3 编码) 音轨，无论请求何种音质均优先返回该音轨（需播放设备及系统支持多声道输出）",
     default: false,
+  },
+  {
+    key: "defaultStorefront",
+    type: "select",
+    label: "默认 Storefront 地区代码",
+    description: "当宿主本体未传递地区、且链接未包含地区路径时的兜底 Apple Music 地区",
+    default: "cn",
+    options: [
+      { label: "中国大陆 (cn)", value: "cn" },
+      { label: "美国 (us)", value: "us" },
+      { label: "日本 (jp)", value: "jp" },
+      { label: "土耳其 (tr)", value: "tr" },
+      { label: "韩国 (kr)", value: "kr" },
+      { label: "中国香港 (hk)", value: "hk" },
+      { label: "中国台湾 (tw)", value: "tw" },
+      { label: "英国 (gb)", value: "gb" },
+    ],
   },
   {
     key: "upstreamUrl",
@@ -71,17 +88,20 @@ splayer.on("musicUrl", async (req: MusicUrlReq): Promise<MusicUrlRes> => {
     throw new Error(`[am-hook] 不支持的源类型: ${source}`);
   }
 
-  // 1. 提取 Adam ID
+  // 1. 提取 Adam ID 与 Storefront
   const adamId = extractAdamId(musicInfo);
   if (!adamId) {
     const rawHint = musicInfo.id || musicInfo.songmid || musicInfo.name || "未知";
     throw new Error(`[am-hook] 无法从曲目信息中提取有效的 Apple Music Adam ID (${rawHint})`);
   }
 
-  // 2. 检查负缓存
-  const cachedError = checkNegativeCache(adamId);
+  const configuredStorefront = splayer.getSetting<string>("defaultStorefront") || "cn";
+  const storefront = resolveStorefront(musicInfo, configuredStorefront);
+
+  // 2. 检查负缓存（按 adamId:storefront 维度隔离）
+  const cachedError = checkNegativeCache(adamId, storefront);
   if (cachedError) {
-    throw new Error(`[am-hook] 曲目短期内解析失败，已触发跳过: ${cachedError}`);
+    throw new Error(`[am-hook] 曲目在 [${storefront}] 地区短期内解析失败，已跳过: ${cachedError}`);
   }
 
   // 3. 读取配置项
@@ -90,7 +110,10 @@ splayer.on("musicUrl", async (req: MusicUrlReq): Promise<MusicUrlRes> => {
   const upstream = rawUpstream.trim().replace(/\/+$/, "");
   const timeoutMs = Number(splayer.getSetting<number>("requestTimeout")) || DEFAULT_TIMEOUT_MS;
 
-  const parseEndpoint = `${upstream}/parse/${adamId}`;
+  // 将 storefront/cc/region 参数同时附带在请求中，确保上游准确路由
+  const parseEndpoint = `${upstream}/parse/${adamId}?storefront=${encodeURIComponent(
+    storefront,
+  )}&cc=${encodeURIComponent(storefront)}&region=${encodeURIComponent(storefront)}`;
 
   try {
     const controller = new AbortController();
@@ -116,7 +139,7 @@ splayer.on("musicUrl", async (req: MusicUrlReq): Promise<MusicUrlRes> => {
         : JSON.parse(new TextDecoder().decode(res.body));
 
     if (!data.masterUrl || !Array.isArray(data.variants) || data.variants.length === 0) {
-      throw new Error(data.msg || "未能解析到该曲目的可用音轨变体");
+      throw new Error(data.msg || `未能解析到 [${storefront}] 地区该曲目的可用音轨变体`);
     }
 
     if (!data.hook) {
@@ -134,7 +157,7 @@ splayer.on("musicUrl", async (req: MusicUrlReq): Promise<MusicUrlRes> => {
     const streamUrl = `${upstream}/${baseUrl}${matched.variant.file_uri}`;
 
     splayer.log.info(
-      `[am-hook] 成功解析 Adam ID ${adamId} -> 编码: ${matched.variant.codecs}, 质量: ${matched.quality}` +
+      `[am-hook] 成功解析 [${storefront}] Adam ID ${adamId} -> 编码: ${matched.variant.codecs}, 质量: ${matched.quality}` +
         (preferDolbyAtmos && matched.variant.codecs.includes("ec-3") ? " (杜比全景声)" : ""),
     );
 
@@ -144,8 +167,8 @@ splayer.on("musicUrl", async (req: MusicUrlReq): Promise<MusicUrlRes> => {
     };
   } catch (err: unknown) {
     const message = (err as Error).message || String(err);
-    recordNegativeCache(adamId, message);
-    splayer.log.warn(`[am-hook] 解析失败 (${adamId}): ${message}`);
+    recordNegativeCache(adamId, storefront, message);
+    splayer.log.warn(`[am-hook] [${storefront}] 解析失败 (${adamId}): ${message}`);
     throw new Error(`[am-hook] 音源解析失败: ${message}`);
   }
 });

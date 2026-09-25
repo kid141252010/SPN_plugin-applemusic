@@ -17,10 +17,14 @@ export interface MusicInfo {
   img?: string | null;
   albumId?: string | number;
   albumName?: string;
+  storefront?: string;
   meta?: {
     songId?: string | number;
     isrc?: string;
     picUrl?: string | null;
+    storefront?: string;
+    country?: string;
+    region?: string;
     [key: string]: unknown;
   };
   [key: string]: unknown;
