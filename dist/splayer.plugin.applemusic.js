@@ -53,12 +53,36 @@
   }
   function resolveStorefront(musicInfo, fallback = "cn") {
     if (!musicInfo) return fallback.toLowerCase();
-    const explicit = musicInfo.storefront || musicInfo.meta?.storefront || musicInfo.meta?.country || musicInfo.meta?.region;
-    if (typeof explicit === "string" && /^[a-zA-Z]{2}$/.test(explicit.trim())) {
-      return explicit.trim().toLowerCase();
+    const info = musicInfo;
+    const meta = musicInfo.meta || {};
+    const candidates = [
+      info.storefront,
+      info.storeFront,
+      info.Storefront,
+      info.StoreFront,
+      info.region,
+      info.country,
+      meta.storefront,
+      meta.storeFront,
+      meta.Storefront,
+      meta.StoreFront,
+      meta.region,
+      meta.country
+    ];
+    for (const raw of candidates) {
+      if (typeof raw !== "string") continue;
+      const str = raw.trim().toLowerCase();
+      if (!str) continue;
+      if (/^[a-z]{2}$/.test(str)) {
+        return str;
+      }
+      const localeMatch = str.match(/[-_]([a-z]{2})$/);
+      if (localeMatch) {
+        return localeMatch[1];
+      }
     }
-    const candidates = [musicInfo.songmid, musicInfo.id, musicInfo.songId];
-    for (const item of candidates) {
+    const urlCandidates = [musicInfo.songmid, musicInfo.id, musicInfo.songId];
+    for (const item of urlCandidates) {
       if (typeof item === "string" && item.includes("music.apple.com")) {
         const urlMatch = item.match(/music\.apple\.com\/([a-zA-Z]{2})\//);
         if (urlMatch) {

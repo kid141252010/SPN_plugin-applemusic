@@ -65,6 +65,7 @@ export function extractAdamId(musicInfo: MusicInfo): string | null {
 
 /**
  * 解析当前曲目对应的 Apple Music Storefront (地区代码，如 cn, us, jp)
+ * 优先从宿主本体传入的 musicInfo 中获取，支持各种驼峰与层级命名
  * @param musicInfo 宿主传入的元数据
  * @param fallback 兜底默认值
  * @returns 规范化的 2 位小写国家/地区码
@@ -72,20 +73,45 @@ export function extractAdamId(musicInfo: MusicInfo): string | null {
 export function resolveStorefront(musicInfo: MusicInfo, fallback = "cn"): string {
   if (!musicInfo) return fallback.toLowerCase();
 
-  // 1. 本体显式传递：musicInfo.storefront 或 musicInfo.meta.storefront/country/region
-  const explicit =
-    musicInfo.storefront ||
-    musicInfo.meta?.storefront ||
-    musicInfo.meta?.country ||
-    musicInfo.meta?.region;
+  const info = musicInfo as Record<string, unknown>;
+  const meta = (musicInfo.meta || {}) as Record<string, unknown>;
 
-  if (typeof explicit === "string" && /^[a-zA-Z]{2}$/.test(explicit.trim())) {
-    return explicit.trim().toLowerCase();
+  // 1. 本体显式传递：按各种常见命名取值（storefront, storeFront, region, country 等）
+  const candidates: unknown[] = [
+    info.storefront,
+    info.storeFront,
+    info.Storefront,
+    info.StoreFront,
+    info.region,
+    info.country,
+    meta.storefront,
+    meta.storeFront,
+    meta.Storefront,
+    meta.StoreFront,
+    meta.region,
+    meta.country,
+  ];
+
+  for (const raw of candidates) {
+    if (typeof raw !== "string") continue;
+    const str = raw.trim().toLowerCase();
+    if (!str) continue;
+
+    // 纯两位字母代码（如 "cn", "us", "jp"）
+    if (/^[a-z]{2}$/.test(str)) {
+      return str;
+    }
+
+    // 格式如 "zh-cn", "en-us" -> 提取最后两位地区代码
+    const localeMatch = str.match(/[-_]([a-z]{2})$/);
+    if (localeMatch) {
+      return localeMatch[1];
+    }
   }
 
   // 2. 从链接中提取（例如用户导入了带 /us/ 或 /jp/ 路径的 Apple Music URL）
-  const candidates = [musicInfo.songmid, musicInfo.id, musicInfo.songId];
-  for (const item of candidates) {
+  const urlCandidates = [musicInfo.songmid, musicInfo.id, musicInfo.songId];
+  for (const item of urlCandidates) {
     if (typeof item === "string" && item.includes("music.apple.com")) {
       const urlMatch = item.match(/music\.apple\.com\/([a-zA-Z]{2})\//);
       if (urlMatch) {

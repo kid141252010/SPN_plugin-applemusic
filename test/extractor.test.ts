@@ -41,12 +41,19 @@ describe("extractAdamId", () => {
 });
 
 describe("resolveStorefront", () => {
-  it("应优先读取本体显式传入的 storefront", () => {
+  it("应优先读取本体显式传入的 storefront (支持 camelCase storeFront / 大写 / 空格)", () => {
     expect(resolveStorefront({ songmid: "1468058171", storefront: "us" })).toBe("us");
     expect(resolveStorefront({ songmid: "1468058171", storefront: "JP" })).toBe("jp");
+    expect(resolveStorefront({ songmid: "1468058171", storeFront: "jp" } as any)).toBe("jp");
+    expect(resolveStorefront({ songmid: "1468058171", StoreFront: " kr " } as any)).toBe("kr");
   });
 
-  it("应读取 meta.storefront / meta.country / meta.region", () => {
+  it("应正确处理 zh-CN 或 en-US 等 Locale 格式", () => {
+    expect(resolveStorefront({ songmid: "1468058171", storefront: "zh-CN" })).toBe("cn");
+    expect(resolveStorefront({ songmid: "1468058171", storeFront: "en_US" } as any)).toBe("us");
+  });
+
+  it("应读取 meta.storefront / meta.storeFront / meta.country / meta.region", () => {
     expect(
       resolveStorefront({
         songmid: "1468058171",
@@ -56,9 +63,21 @@ describe("resolveStorefront", () => {
     expect(
       resolveStorefront({
         songmid: "1468058171",
+        meta: { storeFront: "jp" },
+      } as any),
+    ).toBe("jp");
+    expect(
+      resolveStorefront({
+        songmid: "1468058171",
         meta: { country: "kr" },
       }),
     ).toBe("kr");
+    expect(
+      resolveStorefront({
+        songmid: "1468058171",
+        meta: { region: "hk" },
+      }),
+    ).toBe("hk");
   });
 
   it("当本体未传时，应从 Apple Music Web 链接路径中提取国家代码", () => {
