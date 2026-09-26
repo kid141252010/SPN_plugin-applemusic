@@ -43,10 +43,12 @@
 
 ## 3. 仓库管理与协作流程 (Git & Repository Workflow)
 
-1. **Git 本地与远程协同**：
-   - 远程仓库通过 `git remote add origin <GitHub-Repo-URL>` 绑定，推送到 `main` 分支。
-2. **提交规范**：
-   - 遵循 Conventional Commits 规范，单行中文摘要：`<type>: <summary>`（例如 `feat: 增加本地 WASM 解密流代理支持`，`docs: 添加开发说明`）。
+1. **改动必提交 (Commit upon Completion)**：
+   - 每次完成代码修改、版本更新与产物构建后，**必须及时完成 Git 本地提交**，确保工作区干净，严禁留存未提交的零散修改。
+   - 遵循 Conventional Commits 规范，单行中文摘要：`<type>: <summary>`（例如 `feat: 增加本地 WASM 解密流代理支持`，`chore: 发布 v1.1.0`）。
+2. **禁止自动推送 (Push on User Instruction Only)**：
+   - **智能体严禁私自、主动执行 `git push` 操作**！
+   - 每次改动完成后仅在本地完成 commit，**远程推送必须等待用户下达明确指令或由用户亲自手动执行**。
 
 ---
 
