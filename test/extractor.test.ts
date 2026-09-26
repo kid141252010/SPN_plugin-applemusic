@@ -7,7 +7,7 @@ describe("extractAdamId", () => {
   });
 
   it("应正确解析数字类型 ID", () => {
-    expect(extractAdamId({ songmid: "1468058171", id: "1468058171" })).toBe("1468058171");
+    expect(extractAdamId({ songmid: 1468058171 as unknown as string, id: 1468058171 as unknown as string })).toBe("1468058171");
   });
 
   it("应正确解析带前缀的 ID (am_1468058171)", () => {
@@ -46,11 +46,11 @@ describe("getStorefront", () => {
     expect(getStorefront({ songmid: "1468058171", storefront: "jp" })).toBe("jp");
   });
 
-  it("支持大写自动转换为小写", () => {
+  it("应支持大写自动转换为小写", () => {
     expect(getStorefront({ songmid: "1468058171", storefront: "TR" })).toBe("tr");
   });
 
-  it("支持读取 meta.storefront 备选", () => {
+  it("应支持读取 meta.storefront 备选", () => {
     expect(
       getStorefront({
         songmid: "1468058171",

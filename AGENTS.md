@@ -17,31 +17,50 @@
   - **控制插件与通用 API**：[https://splayer-next.imsyy.top/plugins/control.html](https://splayer-next.imsyy.top/plugins/control.html)
   - **插件市场与更新规范**：[https://splayer-next.imsyy.top/plugins/update.html](https://splayer-next.imsyy.top/plugins/update.html)
 
+## 2. 核心原则与开发纪律 (Core Principles & Mandatory Disciplines)
+
+> [!IMPORTANT]
+> **凡事必先查阅规范（Official Specification First）**：
+> 任何开发者与 Agent 在进行代码改动、功能开发、接口对接或排查问题前，**严禁马虎臆测、凭空假想或闭门造车**！每次行动必须严格核对：
+> 1. **官方插件开发规范文档**：[https://splayer-next.imsyy.top/plugins/](https://splayer-next.imsyy.top/plugins/)（精读总览、[音源插件](https://splayer-next.imsyy.top/plugins/source.html)、[插件更新](https://splayer-next.imsyy.top/plugins/update.html)、[类型参考](https://splayer-next.imsyy.top/types.html)）；
+> 2. **宿主播放器本地源码**：`E:\SPlayer-Next\electron\main\plugins`，直接对照 loader 与 runtime 的实际实现。
+
+### 2.1 版本迭代与变更日志规范（严禁马虎，强制执行）
+1. **每次改动必更新版本号**：
+   - 只要代码有任何功能新增 (`feat`)、缺陷修复 (`fix`)、架构重构 (`refactor`) 或配置调整，**必须严格按 SemVer 递增版本号**（`MAJOR.MINOR.PATCH`），绝对禁止静默改动或发重复版本！
+2. **Changelog 严格写在脚本头部元数据（不要建单独的 .md 文件）**：
+   - SPlayer-Next 插件更新体系是原生基于脚本头 JSDoc 注释解析的，**不需要、也不要新建单独的 CHANGELOG.md 文档**！
+   - 更新日志必须直接写在打包配置 `tsup.config.ts` 的 `banner` 块注释里的 `@changelog` 字段中。
+   - 换行统一使用字面量 `\n` 分隔（宿主插件卡片会按 `pre-wrap` 渲染多行）。
+3. **版本号双处同步与更新地址声明**：
+   - `package.json` 中的 `"version"` 与 `tsup.config.ts` 中的 `@version` 必须保持严格一致。
+   - 必须配置 `@updateUrl` 指向 GitHub raw 脚本地址，以便用户和宿主能正常检测新版并一键更新。
+4. **产物构建与本地联调**：
+   - 改动完成后执行 `pnpm run build`，检查 `dist/1412.applemusic.js` 头部声明是否完整正确。
+   - 将最新构建产物同步到 `%APPDATA%\SPlayer-Next\app-data\plugins\scripts\1412.applemusic.js` 进行联调验证。
+
 ---
 
-## 2. 仓库管理与协作流程 (Git & Repository Workflow)
+## 3. 仓库管理与协作流程 (Git & Repository Workflow)
 
-1. **Git 本地初始化**：
-   - 本地仓库已在 `E:\applemusic` 完成 `git init`。
-2. **远程仓库同步**：
-   - 等待用户在 GitHub 上建立远程仓库。
-   - 当用户创建完成后，通过 `git remote add origin <GitHub-Repo-URL>` 绑定远程，并将初始化代码推送到主分支（`main` 或 `master`）。
-3. **提交规范**：
-   - 遵循 Conventional Commits 规范，单行中文摘要：`<type>: <summary>`（例如 `feat: 初始化插件元数据与架构配置`，`docs: 添加开发说明`）。
+1. **Git 本地与远程协同**：
+   - 远程仓库通过 `git remote add origin <GitHub-Repo-URL>` 绑定，推送到 `main` 分支。
+2. **提交规范**：
+   - 遵循 Conventional Commits 规范，单行中文摘要：`<type>: <summary>`（例如 `feat: 增加本地 WASM 解密流代理支持`，`docs: 添加开发说明`）。
 
 ---
 
-## 3. SPlayer-Next 插件架构与沙箱环境 (Host Sandbox)
+## 4. SPlayer-Next 插件架构与沙箱环境 (Host Sandbox)
 
 插件运行在 SPlayer-Next 的独立插件沙箱中，开发者与 Agent 必须严格遵守以下环境约束：
 
-### 3.1 进程与沙箱模型
+### 4.1 进程与沙箱模型
 - **独立进程**：所有启用的插件共享一个独立的 `splayer-plugin-host` Utility 进程，各插件运行在专有的 `node:vm` 沙箱上下文内。
 - **崩溃隔离与自愈**：单个插件崩溃由宿主看门狗自愈重载（按 2s → 8s → 30s 退避），不会影响播放器主界面与正在播放的声音。
 - **共享单线程事件循环**：所有插件共享同一进程事件循环，**严禁写同步阻塞代码或死循环**。
 - **顶层 5 秒时限**：脚本顶层同步执行必须在 5 秒内完成，耗时操作必须进入异步处理器。
 
-### 3.2 运行环境与全局可用对象
+### 4.2 运行环境与全局可用对象
 - **禁止 Node 模块与原生 API**：没有 `fs`、`net`、`path`、`child_process`，无 `require` / `import`（发布产物必须是单文件 IIFE/打包脚本）。
 - **可用全局变量**：
   - `splayer`：宿主注入的交互核心。
@@ -52,27 +71,31 @@
 
 ---
 
-## 4. 音源插件协议规范 (Source Plugin Protocol)
+## 5. 音源插件协议规范 (Source Plugin Protocol)
 
-### 4.1 脚本头部元数据 (Manifest)
+### 5.1 脚本头部元数据 (Manifest)
 插件脚本头部必须以 JSDoc 块注释声明元数据：
 
 ```javascript
 /**
  * @name Apple Music 音源
  * @id 1412.applemusic
- * @version 1.0.0
- * @description 为 SPlayer-Next 提供 Apple Music 高品质音频播放流解析支持
+ * @version 1.1.0
+ * @description 基于 am-hook 上游服务为 SPlayer-Next 提供 Apple Music 音频流解析支持（支持 Hi-Res、Lossless 无损及杜比全景声）
  * @author 1412
  * @type source
  * @apiLevel 2
+ * @updateUrl https://raw.githubusercontent.com/kid141252010/applemusic/main/dist/1412.applemusic.js
+ * @changelog 支持客户端本地 WASM 解密流代理，实现 Apple CDN 直连秒开\n优化 Storefront 地区解析
  */
 ```
 
 - `@type`：必须声明为 `source`（缺省默认为 `source`）。音源插件自动获得 `network` 权限，无需额外声明 `@grant network`。
 - `@apiLevel`：音源插件标准级别为 `2`（若需评论扩展声明 `3`）。
+- `@updateUrl`：声明稳定 raw 脚本地址，宿主借此检测更新并提供一键升级。
+- `@changelog`：单行内用字面 `\n` 表示换行，宿主卡片按 pre-wrap 渲染更新日志。
 
-### 4.2 注册源能力 (splayer.register)
+### 5.2 注册源能力 (splayer.register)
 在脚本同步执行阶段调用，声明插件支持的源与动作：
 
 ```javascript
@@ -90,7 +113,7 @@ splayer.register({
 
 > **注意**：SPlayer-Next 核心代码（`electron/main/plugins/metadata.ts` 及 `src/services/audioSource.ts`）已将 `applemusic` 平台映射为 source key: `am`。因此插件中必须注册 `am` 键。
 
-### 4.3 音频解析处理器 (splayer.on("musicUrl"))
+### 5.3 音频解析处理器 (splayer.on("musicUrl"))
 ```javascript
 splayer.on("musicUrl", async (req) => {
   const { source, quality, musicInfo } = req;
@@ -115,7 +138,7 @@ splayer.on("musicUrl", async (req) => {
 
 ---
 
-## 5. Apple Music 音源技术考量与实现路径
+## 6. Apple Music 音源技术考量与实现路径
 
 1. **官方机制**：
    - Apple Music 官方音频受 FairPlay DRM 保护，官方 Web API 不直接对外提供无保护音频直链。
@@ -128,7 +151,7 @@ splayer.on("musicUrl", async (req) => {
 
 ---
 
-## 6. 后续开发规划与目录指引
+## 7. 后续开发规划与目录指引
 
 ```
 e:/applemusic/
