@@ -67,6 +67,16 @@ export interface AmParseResponse {
   msg?: string;
 }
 
+/** wrapper-manager /m3u8 响应结构 */
+export interface WmM3u8Response {
+  code: number;
+  msg?: string;
+  data?: {
+    adamId: string;
+    m3u8: string;
+  };
+}
+
 /** 插件配置项定义 */
 export interface PluginSettingItem {
   key: string;
@@ -128,7 +138,12 @@ export interface SPlayerHost {
     error: (...args: unknown[]) => void;
   };
   appleMusic?: {
-    getStreamUrl: (adamId: string, m3u8Url: string, upstreamUrl: string) => Promise<string>;
+    getStreamUrl: (
+      adamId: string,
+      m3u8Url: string,
+      upstreamUrl: string,
+      token?: string,
+    ) => Promise<string>;
   };
 }
 

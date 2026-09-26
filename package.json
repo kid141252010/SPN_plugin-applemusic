@@ -1,6 +1,6 @@
 {
   "name": "splayer-plugin-applemusic",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Apple Music 音源插件（基于 am-hook 上游），为 SPlayer-Next 提供无损及杜比全景声音频流解析支持",
   "main": "dist/1412.applemusic.js",
   "type": "module",
