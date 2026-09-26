@@ -267,15 +267,23 @@
       if (!data.masterUrl || !Array.isArray(data.variants) || data.variants.length === 0) {
         throw new Error(data.msg || `\u672A\u80FD\u89E3\u6790\u5230 [${storefront}] \u5730\u533A\u8BE5\u66F2\u76EE\u7684\u53EF\u7528\u97F3\u8F68\u53D8\u4F53`);
       }
-      if (!data.hook) {
-        throw new Error("\u4E0A\u6E38 am-hook \u5B9E\u4F8B\u672A\u5F00\u542F --hook \u670D\u52A1\u7AEF\u89E3\u5BC6\u6D41\u4EE3\u7406\u6A21\u5F0F\uFF0C\u65E0\u6CD5\u76F4\u63A5\u64AD\u653E");
-      }
       const matched = pickBestVariant(data.variants, quality, preferDolbyAtmos);
-      if (!matched || !matched.variant.file_uri) {
+      if (!matched) {
         throw new Error(`\u672A\u80FD\u627E\u5230\u7B26\u5408\u8981\u6C42 (${quality}) \u7684\u53EF\u64AD\u653E\u97F3\u9891\u53D8\u4F53`);
       }
       const baseUrl = data.masterUrl.slice(0, data.masterUrl.lastIndexOf("/") + 1);
-      const streamUrl = `${upstream}/${baseUrl}${matched.variant.file_uri}`;
+      let streamUrl;
+      if (splayer.appleMusic?.getStreamUrl && matched.variant.uri) {
+        const m3u8Url = `${baseUrl}${matched.variant.uri}`;
+        streamUrl = await splayer.appleMusic.getStreamUrl(adamId, m3u8Url, upstream);
+        splayer.log.info(`[am-hook] \u542F\u7528\u672C\u5730 WASM \u6781\u901F\u76F4\u8FDE\u89E3\u5BC6\u6D41: ${streamUrl}`);
+      } else {
+        if (!data.hook || !matched.variant.file_uri) {
+          throw new Error("\u4E0A\u6E38 am-hook \u5B9E\u4F8B\u672A\u5F00\u542F --hook \u670D\u52A1\u7AEF\u89E3\u5BC6\u6D41\u4EE3\u7406\uFF0C\u4E14\u5BBF\u4E3B\u672A\u5C31\u7EEA\u672C\u5730\u89E3\u5BC6");
+        }
+        streamUrl = `${upstream}/${baseUrl}${matched.variant.file_uri}`;
+        splayer.log.info(`[am-hook] \u964D\u7EA7\u81F3\u670D\u52A1\u7AEF\u4E2D\u8F6C\u89E3\u5BC6\u6D41: ${streamUrl}`);
+      }
       splayer.log.info(
         `[am-hook] \u6210\u529F\u89E3\u6790 [${storefront}] Adam ID ${adamId} -> \u7F16\u7801: ${matched.variant.codecs}, \u8D28\u91CF: ${matched.quality}` + (preferDolbyAtmos && matched.variant.codecs.includes("ec-3") ? " (\u675C\u6BD4\u5168\u666F\u58F0)" : "")
       );

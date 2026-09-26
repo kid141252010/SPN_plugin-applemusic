@@ -119,19 +119,27 @@ splayer.on("musicUrl", async (req: MusicUrlReq): Promise<MusicUrlRes> => {
       throw new Error(data.msg || `未能解析到 [${storefront}] 地区该曲目的可用音轨变体`);
     }
 
-    if (!data.hook) {
-      throw new Error("上游 am-hook 实例未开启 --hook 服务端解密流代理模式，无法直接播放");
-    }
-
     // 4. 匹配音质变体（包含杜比全景声优先判定）
     const matched = pickBestVariant(data.variants, quality, preferDolbyAtmos);
-    if (!matched || !matched.variant.file_uri) {
+    if (!matched) {
       throw new Error(`未能找到符合要求 (${quality}) 的可播放音频变体`);
     }
 
-    // 5. 组装解密流播放直链
     const baseUrl = data.masterUrl.slice(0, data.masterUrl.lastIndexOf("/") + 1);
-    const streamUrl = `${upstream}/${baseUrl}${matched.variant.file_uri}`;
+    let streamUrl: string;
+
+    // 5. 优先采用 SPlayer-Next 客户端本地 WASM 流媒体代理直连 Apple CDN 极速播放
+    if (splayer.appleMusic?.getStreamUrl && matched.variant.uri) {
+      const m3u8Url = `${baseUrl}${matched.variant.uri}`;
+      streamUrl = await splayer.appleMusic.getStreamUrl(adamId, m3u8Url, upstream);
+      splayer.log.info(`[am-hook] 启用本地 WASM 极速直连解密流: ${streamUrl}`);
+    } else {
+      if (!data.hook || !matched.variant.file_uri) {
+        throw new Error("上游 am-hook 实例未开启 --hook 服务端解密流代理，且宿主未就绪本地解密");
+      }
+      streamUrl = `${upstream}/${baseUrl}${matched.variant.file_uri}`;
+      splayer.log.info(`[am-hook] 降级至服务端中转解密流: ${streamUrl}`);
+    }
 
     splayer.log.info(
       `[am-hook] 成功解析 [${storefront}] Adam ID ${adamId} -> 编码: ${matched.variant.codecs}, 质量: ${matched.quality}` +

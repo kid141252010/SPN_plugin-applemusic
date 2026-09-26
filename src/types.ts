@@ -127,6 +127,9 @@ export interface SPlayerHost {
     warn: (...args: unknown[]) => void;
     error: (...args: unknown[]) => void;
   };
+  appleMusic?: {
+    getStreamUrl: (adamId: string, m3u8Url: string, upstreamUrl: string) => Promise<string>;
+  };
 }
 
 declare global {
