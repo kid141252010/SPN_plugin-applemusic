@@ -1,13 +1,13 @@
 /**
  * @name Apple Music 音源
  * @id 1412.applemusic
- * @version 1.2.0
+ * @version 1.3.0
  * @description 基于 am-hook 与 wrapper-manager 上游服务为 SPlayer-Next 提供 Apple Music 音频流解析支持（支持 Hi-Res、Lossless 无损及杜比全景声）
  * @author 1412
  * @type source
  * @apiLevel 2
  * @updateUrl https://raw.githubusercontent.com/kid141252010/applemusic/main/dist/1412.applemusic.js
- * @changelog 支持上游服务 Token 鉴权与 URL 内嵌凭证自动提取\n增加 wrapper-manager 原生协议兼容与 Master M3U8 音轨变体解析
+ * @changelog 增加上游架构服务特性自适应记忆缓存，消除盲测 404 等待 (立减 2.1 秒极速直连)\n增加上游架构模式配置项 (auto/am-hook/wm) 与持久化存储记忆
  */
 
 "use strict";
@@ -289,6 +289,54 @@
     });
   }
 
+  // src/upstreamMode.ts
+  var modeMemoryCache = /* @__PURE__ */ new Map();
+  function normalizeUpstreamKey(upstream) {
+    return (upstream || "").trim().replace(/\/+$/, "");
+  }
+  async function getEffectiveUpstreamMode(upstream, configuredMode = "auto") {
+    const key = normalizeUpstreamKey(upstream);
+    if (!key) return void 0;
+    if (configuredMode === "am-hook" || configuredMode === "wm") {
+      return configuredMode;
+    }
+    if (modeMemoryCache.has(key)) {
+      return modeMemoryCache.get(key);
+    }
+    if (typeof splayer !== "undefined" && splayer.storage?.get) {
+      try {
+        const stored = await splayer.storage.get(`upstream_mode:${key}`);
+        if (stored === "am-hook" || stored === "wm") {
+          modeMemoryCache.set(key, stored);
+          return stored;
+        }
+      } catch {
+      }
+    }
+    return void 0;
+  }
+  function recordUpstreamMode(upstream, mode) {
+    const key = normalizeUpstreamKey(upstream);
+    if (!key) return;
+    modeMemoryCache.set(key, mode);
+    if (typeof splayer !== "undefined" && splayer.storage?.set) {
+      splayer.storage.set(`upstream_mode:${key}`, mode).catch(() => {
+      });
+    }
+  }
+  function clearUpstreamMode(upstream) {
+    if (upstream) {
+      const key = normalizeUpstreamKey(upstream);
+      modeMemoryCache.delete(key);
+      if (typeof splayer !== "undefined" && splayer.storage?.remove) {
+        splayer.storage.remove(`upstream_mode:${key}`).catch(() => {
+        });
+      }
+    } else {
+      modeMemoryCache.clear();
+    }
+  }
+
   // src/index.ts
   var DEFAULT_UPSTREAM = "https://music.ak1ra.de5.net";
   var DEFAULT_TIMEOUT_MS = 4500;
@@ -324,6 +372,18 @@
       default: 4500,
       min: 1e3,
       max: 15e3
+    },
+    {
+      key: "upstreamMode",
+      type: "select",
+      label: "\u4E0A\u6E38\u67B6\u6784\u6A21\u5F0F",
+      description: "\u9009\u62E9\u4E0A\u6E38\u670D\u52A1\u67B6\u6784\u7C7B\u578B\uFF1B\u9ED8\u8BA4'\u81EA\u52A8\u63A2\u6D4B\u5E76\u8BB0\u5FC6'\u5728\u9996\u6B21\u8BF7\u6C42 /parse/ \u8FD4\u56DE 404 \u65F6\u81EA\u9002\u5E94\u5207\u6362\u4E3A wrapper-manager \u5E76\u8DF3\u8FC7\u76F2\u6D4B",
+      default: "auto",
+      options: [
+        { label: "\u81EA\u52A8\u63A2\u6D4B\u5E76\u8BB0\u5FC6 (\u9ED8\u8BA4)", value: "auto" },
+        { label: "\u539F\u751F am-hook (/parse \u590D\u5408\u63A5\u53E3)", value: "am-hook" },
+        { label: "wrapper-manager (/m3u8 \u6781\u901F\u76F4\u8FDE)", value: "wm" }
+      ]
     }
   ];
   splayer.register({
@@ -336,6 +396,15 @@
     },
     settings: SETTINGS
   });
+  if (typeof splayer !== "undefined" && splayer.onSettingChange) {
+    splayer.onSettingChange("upstreamUrl", () => {
+      clearUpstreamMode();
+      splayer.log.info("[am-hook] \u4E0A\u6E38\u5730\u5740\u53D8\u66F4\uFF0C\u5DF2\u91CD\u7F6E\u4E0A\u6E38\u67B6\u6784\u6A21\u5F0F\u81EA\u9002\u5E94\u7F13\u5B58");
+    });
+    splayer.onSettingChange("upstreamMode", (val) => {
+      splayer.log.info(`[am-hook] \u4E0A\u6E38\u67B6\u6784\u6A21\u5F0F\u914D\u7F6E\u66F4\u65B0: ${val}`);
+    });
+  }
   splayer.on("musicUrl", async (req) => {
     const { source, quality, musicInfo } = req;
     if (source !== "am") {
@@ -356,31 +425,51 @@
     const rawToken = splayer.getSetting("upstreamToken") || "";
     const { upstream, token, authHeaders } = parsePluginUpstream(rawUpstream, rawToken);
     const timeoutMs = Number(splayer.getSetting("requestTimeout")) || DEFAULT_TIMEOUT_MS;
+    const configuredMode = splayer.getSetting("upstreamMode") || "auto";
     try {
       let masterUrl = "";
       let variants = [];
       let isHookProxy = false;
-      const amHookEndpoint = `${upstream}/parse/${adamId}?storefront=${encodeURIComponent(storefront)}`;
-      try {
-        const res = await splayer.request(amHookEndpoint, {
-          method: "GET",
-          timeout: timeoutMs,
-          headers: {
-            Accept: "application/json",
-            "User-Agent": "SPlayer-Next/1412.applemusic",
-            ...authHeaders
+      const effectiveMode = await getEffectiveUpstreamMode(upstream, configuredMode);
+      const shouldTryAmHook = effectiveMode !== "wm";
+      if (shouldTryAmHook) {
+        const amHookEndpoint = `${upstream}/parse/${adamId}?storefront=${encodeURIComponent(storefront)}`;
+        try {
+          const res = await splayer.request(amHookEndpoint, {
+            method: "GET",
+            timeout: timeoutMs,
+            headers: {
+              Accept: "application/json",
+              "User-Agent": "SPlayer-Next/1412.applemusic",
+              ...authHeaders
+            }
+          });
+          const status = res.status ?? res.statusCode;
+          if (status === 200) {
+            const data = typeof res.body === "string" ? JSON.parse(res.body) : JSON.parse(new TextDecoder().decode(res.body));
+            if (data.masterUrl && Array.isArray(data.variants) && data.variants.length > 0) {
+              masterUrl = data.masterUrl;
+              variants = data.variants;
+              isHookProxy = Boolean(data.hook);
+              recordUpstreamMode(upstream, "am-hook");
+            }
+          } else if (status === 404) {
+            recordUpstreamMode(upstream, "wm");
+            splayer.log.info(
+              `[am-hook] \u4E0A\u6E38 /parse/ \u63A5\u53E3\u8FD4\u56DE 404\uFF0C\u81EA\u9002\u5E94\u6807\u8BB0\u5E76\u8BB0\u5FC6\u8BE5\u4E0A\u6E38\u4E3A wrapper-manager \u67B6\u6784 (wm)`
+            );
           }
-        });
-        const status = res.status ?? res.statusCode;
-        if (status === 200) {
-          const data = typeof res.body === "string" ? JSON.parse(res.body) : JSON.parse(new TextDecoder().decode(res.body));
-          if (data.masterUrl && Array.isArray(data.variants) && data.variants.length > 0) {
-            masterUrl = data.masterUrl;
-            variants = data.variants;
-            isHookProxy = Boolean(data.hook);
+        } catch (parseErr) {
+          const errMsg = String(parseErr);
+          if (errMsg.includes("404")) {
+            recordUpstreamMode(upstream, "wm");
+            splayer.log.info(
+              `[am-hook] \u4E0A\u6E38 /parse/ \u54CD\u5E94 404\uFF0C\u81EA\u9002\u5E94\u6807\u8BB0\u5E76\u8BB0\u5FC6\u8BE5\u4E0A\u6E38\u4E3A wrapper-manager \u67B6\u6784 (wm)`
+            );
           }
         }
-      } catch {
+      } else {
+        splayer.log.debug(`[am-hook] \u4E0A\u6E38\u5DF2\u9501\u5B9A\u4E3A wrapper-manager \u67B6\u6784 (wm)\uFF0C\u76F4\u63A5\u8DF3\u8FC7 /parse/ \u63A2\u6D4B`);
       }
       if (variants.length === 0) {
         const wmM3u8Endpoint = `${upstream}/m3u8?adamId=${encodeURIComponent(adamId)}&storefront=${encodeURIComponent(storefront)}`;

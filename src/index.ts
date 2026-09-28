@@ -1,6 +1,7 @@
 import type {
   AmParseResponse,
   AmVariant,
+  ConfiguredMode,
   MusicUrlReq,
   MusicUrlRes,
   PluginQuality,
@@ -12,6 +13,11 @@ import { pickBestVariant } from "./matcher";
 import { parseMasterM3u8 } from "./parser";
 import { parsePluginUpstream } from "./upstream";
 import { checkNegativeCache, recordNegativeCache } from "./cache";
+import {
+  clearUpstreamMode,
+  getEffectiveUpstreamMode,
+  recordUpstreamMode,
+} from "./upstreamMode";
 
 /** 默认上游解析服务器地址 */
 const DEFAULT_UPSTREAM = "https://music.ak1ra.de5.net";
@@ -56,6 +62,19 @@ const SETTINGS: PluginSettingItem[] = [
     min: 1000,
     max: 15000,
   },
+  {
+    key: "upstreamMode",
+    type: "select",
+    label: "上游架构模式",
+    description:
+      "选择上游服务架构类型；默认'自动探测并记忆'在首次请求 /parse/ 返回 404 时自适应切换为 wrapper-manager 并跳过盲测",
+    default: "auto",
+    options: [
+      { label: "自动探测并记忆 (默认)", value: "auto" },
+      { label: "原生 am-hook (/parse 复合接口)", value: "am-hook" },
+      { label: "wrapper-manager (/m3u8 极速直连)", value: "wm" },
+    ],
+  },
 ];
 
 /**
@@ -73,6 +92,16 @@ splayer.register({
   },
   settings: SETTINGS,
 });
+
+if (typeof splayer !== "undefined" && splayer.onSettingChange) {
+  splayer.onSettingChange("upstreamUrl", () => {
+    clearUpstreamMode();
+    splayer.log.info("[am-hook] 上游地址变更，已重置上游架构模式自适应缓存");
+  });
+  splayer.onSettingChange("upstreamMode", (val) => {
+    splayer.log.info(`[am-hook] 上游架构模式配置更新: ${val}`);
+  });
+}
 
 /**
  * 处理音频播放流解析
@@ -105,39 +134,61 @@ splayer.on("musicUrl", async (req: MusicUrlReq): Promise<MusicUrlRes> => {
   const rawToken = splayer.getSetting<string>("upstreamToken") || "";
   const { upstream, token, authHeaders } = parsePluginUpstream(rawUpstream, rawToken);
   const timeoutMs = Number(splayer.getSetting<number>("requestTimeout")) || DEFAULT_TIMEOUT_MS;
+  const configuredMode = (splayer.getSetting<string>("upstreamMode") as ConfiguredMode) || "auto";
 
   try {
     let masterUrl = "";
     let variants: AmVariant[] = [];
     let isHookProxy = false;
 
-    // 先尝试 am-hook 复合解析接口
-    const amHookEndpoint = `${upstream}/parse/${adamId}?storefront=${encodeURIComponent(storefront)}`;
-    try {
-      const res = await splayer.request(amHookEndpoint, {
-        method: "GET",
-        timeout: timeoutMs,
-        headers: {
-          Accept: "application/json",
-          "User-Agent": "SPlayer-Next/1412.applemusic",
-          ...authHeaders,
-        },
-      });
+    // 自适应检查上游架构：若已记忆为 wm (wrapper-manager) 或显式配置 wm，直接跳过 /parse/ 请求
+    const effectiveMode = await getEffectiveUpstreamMode(upstream, configuredMode);
+    const shouldTryAmHook = effectiveMode !== "wm";
 
-      const status = res.status ?? res.statusCode;
-      if (status === 200) {
-        const data: AmParseResponse =
-          typeof res.body === "string"
-            ? JSON.parse(res.body)
-            : JSON.parse(new TextDecoder().decode(res.body));
-        if (data.masterUrl && Array.isArray(data.variants) && data.variants.length > 0) {
-          masterUrl = data.masterUrl;
-          variants = data.variants;
-          isHookProxy = Boolean(data.hook);
+    if (shouldTryAmHook) {
+      // 尝试 am-hook 复合解析接口
+      const amHookEndpoint = `${upstream}/parse/${adamId}?storefront=${encodeURIComponent(storefront)}`;
+      try {
+        const res = await splayer.request(amHookEndpoint, {
+          method: "GET",
+          timeout: timeoutMs,
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "SPlayer-Next/1412.applemusic",
+            ...authHeaders,
+          },
+        });
+
+        const status = res.status ?? res.statusCode;
+        if (status === 200) {
+          const data: AmParseResponse =
+            typeof res.body === "string"
+              ? JSON.parse(res.body)
+              : JSON.parse(new TextDecoder().decode(res.body));
+          if (data.masterUrl && Array.isArray(data.variants) && data.variants.length > 0) {
+            masterUrl = data.masterUrl;
+            variants = data.variants;
+            isHookProxy = Boolean(data.hook);
+            recordUpstreamMode(upstream, "am-hook");
+          }
+        } else if (status === 404) {
+          recordUpstreamMode(upstream, "wm");
+          splayer.log.info(
+            `[am-hook] 上游 /parse/ 接口返回 404，自适应标记并记忆该上游为 wrapper-manager 架构 (wm)`,
+          );
         }
+      } catch (parseErr: unknown) {
+        const errMsg = String(parseErr);
+        if (errMsg.includes("404")) {
+          recordUpstreamMode(upstream, "wm");
+          splayer.log.info(
+            `[am-hook] 上游 /parse/ 响应 404，自适应标记并记忆该上游为 wrapper-manager 架构 (wm)`,
+          );
+        }
+        // 若 am-hook 接口不可用，自动降级尝试 wrapper-manager (/m3u8) 接口
       }
-    } catch {
-      // 若 am-hook 接口不可用，自动降级尝试 wrapper-manager (/m3u8) 接口
+    } else {
+      splayer.log.debug(`[am-hook] 上游已锁定为 wrapper-manager 架构 (wm)，直接跳过 /parse/ 探测`);
     }
 
     // 若未通过 am-hook 获取到变体，尝试 wrapper-manager 接口

@@ -5,6 +5,12 @@
 /** SPlayer-Next 音质等级 (与宿主 QualityLevel 保持一致) */
 export type PluginQuality = "hi-res" | "lossless" | "hq" | "sq" | "lq";
 
+/** 上游架构模式探测结果 */
+export type DetectedMode = "am-hook" | "wm";
+
+/** 上游架构模式配置项 ("auto" 自动探测 | "am-hook" 强制 am-hook | "wm" 强制 wrapper-manager) */
+export type ConfiguredMode = "auto" | "am-hook" | "wm";
+
 /** 宿主传入的曲目元数据 (对齐 SPlayer-Next 官方规范) */
 export interface MusicInfo {
   id?: string;
